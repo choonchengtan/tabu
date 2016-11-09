@@ -47,7 +47,7 @@ def Plot(city, R, dist):
     Pt = array(Pt)
     title('Total distance='+str(dist))
     plot(Pt[:,0], Pt[:,1], '-o')
-    show()
+
 
 if __name__=='__main__':
 
