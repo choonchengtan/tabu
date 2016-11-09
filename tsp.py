@@ -40,13 +40,13 @@ def transpt(city, n):
         newcity.append(city[ (j+n[3])%nct ])
     return newcity
 
-def Plot(city, R, dist):
+#def Plot(city, R, dist):
     # Plot
-    Pt = [R[city[i]] for i in range(len(city))]
-    Pt += [R[city[0]]]
-    Pt = array(Pt)
-    title('Total distance='+str(dist))
-    plot(Pt[:,0], Pt[:,1], '-o')
+#    Pt = [R[city[i]] for i in range(len(city))]
+#    Pt += [R[city[0]]]
+#    Pt = array(Pt)
+#    title('Total distance='+str(dist))
+#    plot(Pt[:,0], Pt[:,1], '-o')
 
 
 if __name__=='__main__':
@@ -77,7 +77,7 @@ if __name__=='__main__':
     
     T = Tstart # temperature
 
-    Plot(city, R, dist)
+    #Plot(city, R, dist)
     
     for t in range(maxTsteps):  # Over temperature
 
@@ -125,13 +125,13 @@ if __name__=='__main__':
             if accepted > maxAccepted: break
 
         # Plot
-        Plot(city, R, dist)
+        #Plot(city, R, dist)
             
         print "T=%10.5f , distance= %10.5f , accepted steps= %d" %(T, dist, accepted)
         T *= fCool             # The system is cooled down
         if accepted == 0: break  # If the path does not want to change any more, we can stop
 
         
-    Plot(city, R, dist)
+    #Plot(city, R, dist)
     
     
