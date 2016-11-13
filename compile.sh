@@ -1,6 +1,3 @@
-#!/bin/sh
-
-
-# type [mpd &] if got warning
-# type [sh compile.sh]
-mpirun -n 5 python helloworld.py;
+python main.py -s ./tspfiles/burma14.tsp
+python main.py -s ./tspfiles/gr666.tsp
+python main.py -s ./tspfiles/ulysses22.tsp
