@@ -10,9 +10,8 @@ def calc_distance(tsp, city1_index, city2_index):
 
 def tour_distance(tsp, tour):
     total = 0
-    for i in tour[:-2]:
-        for j in tour[1:]:
-            total += calc_distance(tsp, i, j)
+    for i,j in zip(tour[:-1], tour[1:]):
+        total += calc_distance(tsp, i, j)
     return total
 
 def nearest_neighbor(tsp, start):
