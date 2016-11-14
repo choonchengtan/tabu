@@ -3,6 +3,8 @@ from city        import distance, GeoCity, Euc_2D, GeoCoord
 from tspparse    import read_tsp_file
 from numpy       import array
 from pprint      import pprint
+from matplotlib import pyplot as plt
+import networkx as nx
 import copy
 import random
 
@@ -32,7 +34,7 @@ def swap_2opt(tsp, tour_input):
     tour = copy.deepcopy(tour_input) 
     if tour[0] == tour[-1]:
         del tour[-1]
-    MIN_TOTAL_IMPROVE = 10 
+    MIN_TOTAL_IMPROVE = 100 
     MAX_IMPROVE_LOOP = 50
     MAX_TABU = 1000
     improve = [MIN_TOTAL_IMPROVE+1]
@@ -119,10 +121,42 @@ def choose_edge_random(tsp, tour, tabu):
 
 def calc_serial_2opt_tour(tsp):
     tour = nearest_neighbor(tsp, 1)
+
+    G=nx.Graph()
+    pos = {}
+    cnt = 0
+    for i in tsp["CITIES"]:
+        pos.update({ cnt:(i.x, i.y) }) 
+        cnt += 1
+    G.add_nodes_from(pos)
+    edges = []
+    for i,j in zip(tour[:], tour[1:]):
+       edges.append((i, j)) 
+    G.add_edges_from(edges)
+    nx.draw_networkx(G, pos=pos, node_size=100, font_size=6)
+    plt.axis('off')
+    plt.show() # display
+
     print tour
     print tour_distance(tsp, tour)
     tour = swap_2opt(tsp, tour)
     total_dist = tour_distance(tsp, tour)
+
+    G=nx.Graph()
+    pos = {}
+    cnt = 0
+    for i in tsp["CITIES"]:
+        pos.update({ cnt:(i.x, i.y) }) 
+        cnt += 1
+    G.add_nodes_from(pos)
+    edges = []
+    for i,j in zip(tour[:], tour[1:]):
+       edges.append((i, j)) 
+    G.add_edges_from(edges)
+    nx.draw_networkx(G, pos=pos, node_size=100, font_size=6)
+    plt.axis('off')
+    plt.show() # display
+
     print tour
     #pprint(tsp)         
     #cities = tsp["CITIES"]
