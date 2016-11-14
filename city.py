@@ -57,4 +57,5 @@ def distance(city1, city2):
     elif type(city1) == Euc_2D:
         return euc_2d_distance(city1, city2)
     else:
-        return geo_distance(city1, city2)
+        return euc_2d_distance(city1, city2)
+        #return geo_distance(city1, city2)

@@ -35,7 +35,7 @@ def print_results_from_tsp_path(call_args, tsp_path):
 
     if call_args.need_serial_2opt:
         # not fully done yet
-        print("SERIAL NEAREST NEIGHBOR TOUR LENGTH:     {}"
+        print("SEQUENTIAL 2-OPT TOUR LENGTH:     {}"
              . format(calc_serial_2opt_tour(tsp)))
 
     if call_args.need_parallel_2opt:
