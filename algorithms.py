@@ -143,11 +143,13 @@ def calc_serial_2opt_tour(tsp):
     BESTTOUR= copy.copy(tour)
     MAXTABU=5
     TABULIST= [[] for _ in range(MAXTABU)]
-    TABULIST[0]= copy.copy(tour)
+    for i in xrange (MAXTABU):
+       TABULIST[i]= copy.copy(tour)
     TABUPTR=1
     for i in xrange (iteration):
        if STATE >=1:
            index=random.randrange(0,len(TABULIST),1)
+           print "Random Generated: %d" %index
            tour = swap_2opt(tsp, TABULIST[index])
        else:           
            tour = swap_2opt(tsp, BESTTOUR)
@@ -169,9 +171,6 @@ def calc_serial_2opt_tour(tsp):
              print BESTTOUR
              print BESTTOURLEN
              print STATE
-             print "Length for TABU list\n"
-             print len(TABULIST)/len(BESTTOUR)
-             print TABULIST
              break
 
        print BESTTOUR
