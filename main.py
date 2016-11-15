@@ -45,10 +45,12 @@ def print_results_from_tsp_path(call_args, tsp_path):
     print("")
     del(tsp)
 
-def main():
+def assignment():
     call_args = parser.parse_args()
     for tsp_path in glean_tsp_files(call_args.tsp_queue):
         print_results_from_tsp_path(call_args,tsp_path)
 
 if __name__ == "__main__":
-    main()
+    import timeit
+    #assignment()
+    print(timeit.timeit("assignment()", setup="from __main__ import assignment", number=1))

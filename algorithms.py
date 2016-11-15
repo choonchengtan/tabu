@@ -135,12 +135,50 @@ def calc_serial_2opt_tour(tsp):
     G.add_edges_from(edges)
     nx.draw_networkx(G, pos=pos, node_size=100, font_size=6)
     plt.axis('off')
-    plt.show() # display
+    #plt.show() # display
 
-    print tour
-    print tour_distance(tsp, tour)
-    tour = swap_2opt(tsp, tour)
-    total_dist = tour_distance(tsp, tour)
+    iteration=20
+    STATE=0
+    BESTTOURLEN=10000000
+    BESTTOUR= copy.copy(tour)
+    MAXTABU=5
+    TABULIST= [[] for _ in range(MAXTABU)]
+    TABULIST[0]= copy.copy(tour)
+    TABUPTR=1
+    for i in xrange (iteration):
+       if STATE >=1:
+           index=random.randrange(0,len(TABULIST),1)
+           tour = swap_2opt(tsp, TABULIST[index])
+       else:           
+           tour = swap_2opt(tsp, BESTTOUR)
+       total_dist = tour_distance(tsp, tour)
+       if total_dist < BESTTOURLEN:
+          BESTTOURLEN = total_dist
+          BESTTOUR =  copy.copy(tour)
+          if TABUPTR < MAXTABU:
+             TABULIST[TABUPTR]= copy.copy(tour)
+             TABUPTR=TABUPTR+1
+          else:
+             #Replace the first item in tabu list if fully filled
+             TABUPTR=0
+          if STATE <> 0:
+             STATE=STATE-1
+       else:
+          STATE=STATE+1
+          if STATE >= 4:
+             print BESTTOUR
+             print BESTTOURLEN
+             print STATE
+             print "Length for TABU list\n"
+             print len(TABULIST)/len(BESTTOUR)
+             print TABULIST
+             break
+
+       print BESTTOUR
+       print BESTTOURLEN
+       print STATE
+       
+       
 
     G=nx.Graph()
     pos = {}
@@ -150,20 +188,20 @@ def calc_serial_2opt_tour(tsp):
         cnt += 1
     G.add_nodes_from(pos)
     edges = []
-    for i,j in zip(tour[:], tour[1:]):
+    for i,j in zip(BESTTOUR[:], BESTTOUR[1:]):
        edges.append((i, j)) 
     G.add_edges_from(edges)
     nx.draw_networkx(G, pos=pos, node_size=100, font_size=6)
     plt.axis('off')
     plt.show() # display
 
-    print tour
+    print BESTTOUR
     #pprint(tsp)         
     #cities = tsp["CITIES"]
     #f = lambda k: 'x: {x} y: {y}'.format(x=k.coord_tuple()[0], y=k.coord_tuple()[1])
     #strs = map(f, cities)
     #pprint(strs)
-    return total_dist
+    return BESTTOUR
 
 def calc_parallel_2opt_tour(tsp):
     pprint(tsp)         
