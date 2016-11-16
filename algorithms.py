@@ -122,22 +122,9 @@ def choose_edge_random(tsp, tour, tabu):
 def calc_serial_2opt_tour(tsp):
     tour = nearest_neighbor(tsp, 1)
 
-    G=nx.Graph()
-    pos = {}
-    cnt = 0
-    for i in tsp["CITIES"]:
-        pos.update({ cnt:(i.x, i.y) }) 
-        cnt += 1
-    G.add_nodes_from(pos)
-    edges = []
-    for i,j in zip(tour[:], tour[1:]):
-       edges.append((i, j)) 
-    G.add_edges_from(edges)
-    nx.draw_networkx(G, pos=pos, node_size=100, font_size=6)
-    plt.axis('off')
-    #plt.show() # display
 
-    iteration=20
+
+    iteration=200
     STATE=0
     BESTTOURLEN=10000000
     BESTTOUR= copy.copy(tour)
@@ -168,14 +155,10 @@ def calc_serial_2opt_tour(tsp):
        else:
           STATE=STATE+1
           if STATE >= 4:
-             print BESTTOUR
-             print BESTTOURLEN
-             print STATE
+
              break
 
-       print BESTTOUR
-       print BESTTOURLEN
-       print STATE
+
        
        
 
@@ -194,7 +177,7 @@ def calc_serial_2opt_tour(tsp):
     plt.axis('off')
     plt.show() # display
 
-    print BESTTOUR
+    print BESTTOURLEN
     #pprint(tsp)         
     #cities = tsp["CITIES"]
     #f = lambda k: 'x: {x} y: {y}'.format(x=k.coord_tuple()[0], y=k.coord_tuple()[1])
