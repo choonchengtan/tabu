@@ -1,10 +1,10 @@
 #!/usr/bin/env python
+import time
 
 from argparser  import parser
 from tspparse   import read_tsp_file
 from algorithms import ( calc_serial_2opt_tour
                        , calc_parallel_2opt_tour )
-
 
 from glob    import iglob
 from os.path import isfile, isdir, join, exists
@@ -30,19 +30,21 @@ def glean_tsp_files(path_arg_list):
 
 def print_results_from_tsp_path(call_args, tsp_path):
     tsp = read_tsp_file(tsp_path)
-    print("TSP Problem:              {}".format(tsp["NAME"]))
-    print("PATH:                     {}".format(tsp_path))
+    print("")
+    print("Problem: {}".format(tsp_path))
 
     if call_args.need_serial_2opt:
-        # not fully done yet
-        print("SEQUENTIAL 2-OPT TOUR LENGTH:     {}"
+        print("Sequential:")
+        print("")
+        print("Tour: {}"
              . format(calc_serial_2opt_tour(tsp)))
 
     if call_args.need_parallel_2opt:
-        print("PARALLEL 2-OPT TOUR LENGTH:     {}"
-             . format(calc_parallel_2opt_tour(tsp)))
+        print("Open MP:")
+        print("")
+        result = calc_parallel_2opt_tour(tsp)
+        print("Tour Length = {} | Cities = {}" . format(result[0], result[1]))
 
-    print("")
     del(tsp)
 
 def assignment():
@@ -51,6 +53,13 @@ def assignment():
         print_results_from_tsp_path(call_args,tsp_path)
 
 if __name__ == "__main__":
-    import timeit
-    #assignment()
-    print(timeit.timeit("assignment()", setup="from __main__ import assignment", number=1))
+
+    f = open('tsplog', 'w')
+    tic = time.time()
+    assignment()
+    toc = time.time()
+    print ('Processing time: %r\n' % (toc - tic))
+    print("")
+    f.write('Processing time: %r\n' % (toc - tic))
+    f.closed
+
