@@ -3,7 +3,7 @@ from city        import distance, GeoCity, Euc_2D, GeoCoord
 from tspparse    import read_tsp_file
 from numpy       import array
 from pprint      import pprint
-from multiprocessing import Pool
+from multiprocessing import Process, Queue, Pool
 from functools   import partial
 from itertools   import chain
 import copy
@@ -249,26 +249,40 @@ def calc_serial_2opt_tour(tsp):
     #pprint(strs)
     return BESTTOUR
 
-def localsearch(path, cities):
+
+def rough_chunk(seq, num):
+  avg = len(seq) / float(num)
+  out = []
+  last = 0.0
+
+  while last < len(seq):
+    out.append(seq[int(last):int(last + avg)])
+    last += avg
+
+  return out
+
+
+cities = []
+
+def localsearch(path, proc, queue):
     if len(path) > 3:
-        # i saja reverse the middle portion of sub-path
         # first and last element must not CHANGE
+
         path = [path[0]] + list(reversed(path[1:len(path)-1])) + [path[len(path)-1]]
         
-    return path
+    queue.put([proc, path]) # mark the sub tour using processor id
+
 
 def calc_parallel_2opt_tour(tsp):
 
-    THREADS = 4
-    MAX_ITER = 5;   
+    THREADS = 8
+    MAX_ITER = 1
 
     pool = Pool(processes=THREADS)
     cities = tsp["CITIES"]
-    chunk_sz = len(cities) / THREADS
-    localsearch_wparam = partial(localsearch, cities=cities) # put in default parameter
 
     tour = range(len(cities))
-    tour.append(tour[0])        # make path into complete cycle -> become tour
+    tour.append(tour[0])                    # make path into a tour
     
     dist = tour_distance(cities, tour)
     best_dist = dist
@@ -281,12 +295,26 @@ def calc_parallel_2opt_tour(tsp):
         new_tour = new_tour[chunk_sz/2:] + new_tour[:chunk_sz/2]
         new_tour.append(new_tour[0])
 
-        # split new_tour into chunk_sz or less and pass to localsearch()
-        splits = [new_tour[i:i+chunk_sz] for i in xrange(0,len(new_tour),chunk_sz)]     
-        collected = pool.map(localsearch_wparam, splits)  
+        # split new_tour by THREADS and pass to localsearch()
+        splits = rough_chunk(new_tour, THREADS)
+        print splits
+        queue = Queue()
+        procs = []
+        for m in xrange(len(splits)):
+            # mark the subtour using processor id
+            p = Process(target=localsearch, args=(splits[m], m, queue,)) 
+            p.Daemon = True
+            procs.append(p)
+            p.start()
 
         # merge the collected paths
-        new_tour = sum(collected, [])
+        for p in procs:
+            p.join()
+        queue.put('Q_END')        
+        new_tour = [None] * THREADS
+        for i in iter(queue.get, 'Q_END'):
+            new_tour[i[0]] = i[1]
+        new_tour = [city for subt in new_tour for city in subt] 
 
         # replace best with current if better
         dist = tour_distance(cities, new_tour)
@@ -295,3 +323,5 @@ def calc_parallel_2opt_tour(tsp):
             best_tour = new_tour
 
     return (best_dist, best_tour)
+
+
