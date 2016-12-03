@@ -263,6 +263,8 @@ def rough_chunk(seq, num):
 
 
 def localsearch(path, proc, cities, queue):
+    # local memory: path, proc
+    # shared memory: cities, queue
     PATHLEN = len(path)
     if PATHLEN > 4:
         # first and last element must not CHANGE
@@ -290,7 +292,7 @@ def localsearch(path, proc, cities, queue):
 def calc_parallel_2opt_tour(tsp):
 
     THREADS = 2
-    MAX_ITER = 10
+    MAX_ITER = 10   # Monte Carlo steps
 
     pool = Pool(processes=THREADS)
     cities = tsp["CITIES"]
@@ -312,26 +314,27 @@ def calc_parallel_2opt_tour(tsp):
 
         # split new_tour by THREADS and pass to localsearch()
         splits = rough_chunk(new_tour, THREADS)
-        if THREADS == 1:
+        if THREADS == 1:    # need to change tour to path because localsearch() accepts path           
             splits[0] = splits[0][:len(splits[0])-1]            
-        queue = Queue()
+        queue = Queue() # shared queue among all processors 
+
         procs = []
         for m in xrange(len(splits)):
-            # mark the subtour using processor id
+            # mark the subtour using processor id, m
             p = Process(target=localsearch, args=(splits[m], m, cities, queue,)) 
-            p.Daemon = True
+            p.Daemon = True     # dieing parent thread will terminate this child p
             procs.append(p)
             p.start()
 
         # merge the collected paths
         for p in procs:
             p.join()
-        queue.put('Q_END')        
+        queue.put('QUEUE_END')                          
         new_tour = [None] * THREADS
-        for i in iter(queue.get, 'Q_END'):
+        for i in iter(queue.get, 'QUEUE_END'):
             new_tour[i[0]] = i[1]
-        new_tour = [city for subt in new_tour for city in subt] 
-        if THREADS == 1:
+        new_tour = [city for subt in new_tour for city in subt] # flatten list
+        if THREADS == 1: # need to change path back to tour because localsearch() return path           
             new_tour.append(new_tour[0])
 
         # replace best with current if better
