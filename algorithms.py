@@ -286,7 +286,7 @@ def localsearch(path, proc, cities, queue):
                 accepted = accepted + 1                                     
             if accepted > MAX_ACCEPT:
                 break
-    queue.put([proc, path]) # mark the sub tour using processor id
+    queue.put([proc, path]) # mark the sub tour using processor id, proc
 
 
 def calc_parallel_2opt_tour(tsp):
@@ -294,10 +294,8 @@ def calc_parallel_2opt_tour(tsp):
     THREADS = 2
     MAX_ITER = 10   # Monte Carlo steps
 
-    pool = Pool(processes=THREADS)
     cities = tsp["CITIES"]
     chunk_sz = (len(cities)+1) / THREADS
-
     tour = range(len(cities))
     tour.append(tour[0])                    # make path into a tour
     
@@ -307,17 +305,19 @@ def calc_parallel_2opt_tour(tsp):
 
     for i in xrange(MAX_ITER):
         new_tour = best_tour
+
         # rotate new_tour by chunk_sz/2
         new_tour = new_tour[:len(new_tour)-1]
         new_tour = new_tour[chunk_sz/2:] + new_tour[:chunk_sz/2]
         new_tour.append(new_tour[0])
 
-        # split new_tour by THREADS and pass to localsearch()
+        # split new_tour by THREADS 
         splits = rough_chunk(new_tour, THREADS)
         if THREADS == 1:    # need to change tour to path because localsearch() accepts path           
             splits[0] = splits[0][:len(splits[0])-1]            
+        
+        # pass to localsearch()
         queue = Queue() # shared queue among all processors 
-
         procs = []
         for m in xrange(len(splits)):
             # mark the subtour using processor id, m
