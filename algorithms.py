@@ -274,7 +274,7 @@ def local_search(path, proc, cities, queue):
         for i in xrange(MAX_STEPS):
             point1 = -1
             point2 = -1
-            while point1 >= point2 or point1+1 == point2:      # not same city, point1 < point2 and not adjacent 
+            while point1 >= point2 or point1+1 == point2:       # not same city, point1 < point2 and not adjacent 
                 point1 = random.randint(0, PATH_LEN - 2)        # select one city
                 point2 = random.randint(0, PATH_LEN - 2)        # select one city
 
@@ -284,26 +284,32 @@ def local_search(path, proc, cities, queue):
                 # swap edges
                 path[point1+1:point2+1] = path[point1+1:point2+1][::-1]
                 accepted = accepted + 1                                     
+
             if accepted > MAX_ACCEPT:
                 break
+
     queue.put([proc, path]) # mark the sub tour using processor id, proc
 
 
 def calc_parallel_2opt_tour(tsp):
 
-    THREADS = 2
+    THREADS = 4
     MAX_ITER = 10   
 
     cities = tsp["CITIES"]
     chunk_sz = (len(cities)+1) / THREADS
-    tour = range(len(cities))
+    tour = nearest_neighbor(cities, random.randint(0,len(cities)-1))
     tour.append(tour[0])                    # make path into a tour
     
     dist = tour_distance(cities, tour)
     best_dist = dist
     best_tour = tour
+    print "nearest neighbor"
+    print best_dist
 
+    print "search iteration:"
     for i in xrange(MAX_ITER):
+
         new_tour = best_tour
 
         # rotate new_tour by chunk_sz/2 or chunk_sz/3 randomly
@@ -332,15 +338,15 @@ def calc_parallel_2opt_tour(tsp):
             p.join()
         queue.put('QUEUE_END')                          
         new_tour = [None] * THREADS
-        for i in iter(queue.get, 'QUEUE_END'):
-            new_tour[i[0]] = i[1]
+        for s in iter(queue.get, 'QUEUE_END'):
+            new_tour[s[0]] = s[1]
         new_tour = [city for subt in new_tour for city in subt] # flatten list
         if THREADS == 1: # need to change path back to tour because local_search() return path           
             new_tour.append(new_tour[0])
 
         # replace best solution with current if better
         dist = tour_distance(cities, new_tour)
-        print dist
+        print [i, dist]
         if dist < best_dist:
             best_dist = dist    
             best_tour = new_tour
