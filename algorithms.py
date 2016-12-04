@@ -262,21 +262,21 @@ def rough_chunk(seq, num):
   return out
 
 
-def localsearch(path, proc, cities, queue):
+def local_search(path, proc, cities, queue):
     # local memory: path, proc
-    # shared memory: cities, queue
-    PATHLEN = len(path)
-    if PATHLEN > 4:
+    # shared memory: cities(read only), queue(write only)
+    PATH_LEN = len(path)
+    if PATH_LEN > 4:
         # first and last element must not CHANGE
-        MAX_STEPS = 100 * len(path)
-        MAX_ACCEPT = 10 * len(path)
+        MAX_STEPS = 100 * PATH_LEN  # Monte Carlo steps
+        MAX_ACCEPT = 10 * PATH_LEN 
         accepted = 0
         for i in xrange(MAX_STEPS):
             point1 = -1
             point2 = -1
             while point1 >= point2 or point1+1 == point2:      # not same city, point1 < point2 and not adjacent 
-                point1 = random.randint(0, PATHLEN - 2)        # select one city
-                point2 = random.randint(0, PATHLEN - 2)        # select one city
+                point1 = random.randint(0, PATH_LEN - 2)        # select one city
+                point2 = random.randint(0, PATH_LEN - 2)        # select one city
 
             # todo: add transpose  if rand() > Preverse
             if  calc_distance(cities, path[point1], path[point2])   + calc_distance(cities, path[point1+1], path[point2+1]) < \
@@ -292,7 +292,7 @@ def localsearch(path, proc, cities, queue):
 def calc_parallel_2opt_tour(tsp):
 
     THREADS = 2
-    MAX_ITER = 10   # Monte Carlo steps
+    MAX_ITER = 10   
 
     cities = tsp["CITIES"]
     chunk_sz = (len(cities)+1) / THREADS
@@ -306,14 +306,15 @@ def calc_parallel_2opt_tour(tsp):
     for i in xrange(MAX_ITER):
         new_tour = best_tour
 
-        # rotate new_tour by chunk_sz/2
+        # rotate new_tour by chunk_sz/2 or chunk_sz/3 randomly
         new_tour = new_tour[:len(new_tour)-1]
-        new_tour = new_tour[chunk_sz/2:] + new_tour[:chunk_sz/2]
+        cut_point = random.randint(2,3)
+        new_tour = new_tour[chunk_sz/cut_point:] + new_tour[:chunk_sz/cut_point]
         new_tour.append(new_tour[0])
 
         # split new_tour by THREADS 
         splits = rough_chunk(new_tour, THREADS)
-        if THREADS == 1:    # need to change tour to path because localsearch() accepts path           
+        if THREADS == 1:    # need to change tour to path because local_search() accepts path           
             splits[0] = splits[0][:len(splits[0])-1]            
         
         # pass to localsearch()
@@ -321,12 +322,12 @@ def calc_parallel_2opt_tour(tsp):
         procs = []
         for m in xrange(len(splits)):
             # mark the subtour using processor id, m
-            p = Process(target=localsearch, args=(splits[m], m, cities, queue,)) 
+            p = Process(target=local_search, args=(splits[m], m, cities, queue,)) 
             p.Daemon = True     # dieing parent thread will terminate this child p
             procs.append(p)
             p.start()
 
-        # merge the collected paths
+        # merge the collected paths in queue
         for p in procs:
             p.join()
         queue.put('QUEUE_END')                          
@@ -334,10 +335,10 @@ def calc_parallel_2opt_tour(tsp):
         for i in iter(queue.get, 'QUEUE_END'):
             new_tour[i[0]] = i[1]
         new_tour = [city for subt in new_tour for city in subt] # flatten list
-        if THREADS == 1: # need to change path back to tour because localsearch() return path           
+        if THREADS == 1: # need to change path back to tour because local_search() return path           
             new_tour.append(new_tour[0])
 
-        # replace best with current if better
+        # replace best solution with current if better
         dist = tour_distance(cities, new_tour)
         print dist
         if dist < best_dist:
