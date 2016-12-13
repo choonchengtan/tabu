@@ -1,13 +1,18 @@
 from collections import deque
 from city        import distance, GeoCity, Euc_2D, GeoCoord
 from tspparse    import read_tsp_file
-from numpy       import array
 from pprint      import pprint
 from multiprocessing import Process, Queue, Pool
 from functools   import partial
 from itertools   import chain
+from pycuda.compiler import SourceModule
+from pycuda      import gpuarray
 import copy
 import random
+import pycuda.driver as cuda 
+import pycuda.tools
+import pycuda.autoinit
+import numpy as numpy
 
 def calc_distance(cities,city1_index, city2_index):
     return distance(cities[city1_index], cities[city2_index])
@@ -176,7 +181,7 @@ def swap_2opt(cities, tour_input):
     tour.append(tour[0])
     return tour                 
 
-def calc_serial_2opt_tour(tsp):
+def calc_sequential_2opt_tour(tsp):
         
     cities = tsp["CITIES"]
     
@@ -291,7 +296,7 @@ def local_search(path, proc, cities, queue):
     queue.put([proc, path]) # mark the sub tour using processor id, proc
 
 
-def calc_parallel_2opt_tour(tsp):
+def calc_openmp_2opt_tour(tsp):
 
     THREADS = 4
     MAX_ITER = 10   
@@ -354,3 +359,106 @@ def calc_parallel_2opt_tour(tsp):
     return (best_dist, best_tour)
 
 
+mod_gpu = SourceModule("""
+
+#include <curand.h>
+#include <curand_kernel.h>
+
+extern "C" {
+
+    const int MAX_SZ = 2048;
+    __shared__ __device__ float _city_xy[MAX_SZ * 2];
+    __shared__ __device__ int _city_xy_sz;
+    __shared__ __device__ int _path[MAX_SZ];
+    __shared__ __device__ int _path_sz;
+    __shared__ __device__ curandState _curandStates[128];
+
+    __global__ void gpu_2opt_path(float* city_xy, int city_xy_sz, int* path, int path_sz)
+    {
+        // copy from device global memory into shared memory     
+        if (threadIdx.x == 0) {
+            _city_xy_sz = city_xy_sz;
+            for (int i=0; i<city_xy_sz; i++) {
+                _city_xy[i] = city_xy[i];
+            }
+            _path_sz = path_sz;
+            for (int i=0; i<path_sz; i++) {
+                _path[i] = path[i];
+            }
+        }
+        __syncthreads();
+
+        // initialize cuda device random numbers
+        curand_init(clock() + threadIdx.x, 0, 0, &_curandStates[threadIdx.x]);
+        __syncthreads();
+
+        // for every thread, swap (edge i with edge j) if got improvement
+        const int MAX_STEPS = 1000 * _path_sz;
+        const int MAX_ACCEPT = 100 * _path_sz;
+        int pt1, pt2, c1, c2, c3, c4, tmp;
+        float oe1, oe2, ne1, ne2;
+        for (int i=0, a=0; i<MAX_STEPS; i++) {
+            pt1 = -1;
+            pt2 = -1;
+            while (pt1 >= pt2 || pt1 + 1 == pt2) {
+                pt1 = curand(&_curandStates[threadIdx.x]) % (_path_sz - 1);
+                pt2 = curand(&_curandStates[threadIdx.x]) % (_path_sz - 1);
+            }
+           
+            c1 = _path[pt1];
+            c2 = _path[pt1+1];
+            c3 = _path[pt2];
+            c4 = _path[pt2+1];
+            oe1 = sqrtf(powf(_city_xy[c1] - _city_xy[c2], 2) + powf(_city_xy[c1 + _path_sz] - _city_xy[c2 + _path_sz], 2));  
+            oe2 = sqrtf(powf(_city_xy[c3] - _city_xy[c4], 2) + powf(_city_xy[c3 + _path_sz] - _city_xy[c4 + _path_sz], 2));  
+            ne1 = sqrtf(powf(_city_xy[c1] - _city_xy[c3], 2) + powf(_city_xy[c1 + _path_sz] - _city_xy[c3 + _path_sz], 2));  
+            ne2 = sqrtf(powf(_city_xy[c2] - _city_xy[c4], 2) + powf(_city_xy[c2 + _path_sz] - _city_xy[c4 + _path_sz], 2));  
+
+            if (ne1 + ne2 < oe1 + oe2) {
+                // need do mutex stuff here
+                for (int b=pt1+1, e=pt2; b < e; b++, e--) {
+                    tmp = _path[b];
+                    _path[b] = _path[e];
+                    _path[e] = tmp; 
+                }            
+                a++;
+            }   
+
+            if (a > MAX_ACCEPT)
+                break;
+        }
+        __syncthreads();
+
+        // copy back from shared memory to device global memory
+        if (threadIdx.x == 0) {
+            for (int i=0; i<path_sz; i++) {
+                path[i] = _path[i];
+            } 
+        }
+    }
+}
+
+""", no_extern_c=True)
+
+def calc_gpu_2opt_tour(tsp):
+
+    gpu_2opt_path = mod_gpu.get_function("gpu_2opt_path")
+    
+    THREADS = 1 
+
+    city_xy = [c.x for c in tsp["CITIES"]] + [c.y for c in tsp["CITIES"]] 
+    city_xy_n = numpy.array(city_xy)
+    tour_tmp = range(len(tsp["CITIES"]))
+    print tour_distance(tsp["CITIES"], tour_tmp)
+    #tour_tmp.append(tour_tmp[0])
+    tour_n = numpy.array(tour_tmp)
+    city_xy_g = gpuarray.to_gpu(city_xy_n.astype(numpy.float32))
+    tour_g = gpuarray.to_gpu(tour_n.astype(numpy.int32))
+
+    gpu_2opt_path(city_xy_g, numpy.int32(city_xy_n.size), tour_g, numpy.int32(tour_n.size), block=(THREADS, 1, 1))
+    cuda.Context.synchronize()
+
+    best_tour = tour_g.get()
+    best_dist = tour_distance(tsp["CITIES"], best_tour)
+
+    return (best_dist, best_tour)

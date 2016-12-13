@@ -6,29 +6,29 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument (
       "-s"
-    , "--serial"
+    , "--sequential"
     , action  = "store_true"
-    , dest    = "need_serial_2opt"
+    , dest    = "need_sequential_2opt"
     , default = False
-    , help    = "calculate distance traveled by serial 2-opt heuristic"
+    , help    = "calculate distance traveled by sequential 2-opt heuristic"
     )
 
 parser.add_argument (
-      "-r"
-    , "--parallel"
+      "-o"
+    , "--openmp"
     , action  = "store_true"
-    , dest    = "need_parallel_2opt"
+    , dest    = "need_openmp_2opt"
     , default = False
-    , help    = "calculate distance traveled by parallel 2-opt heuristic"
+    , help    = "calculate distance traveled by openmp 2-opt heuristic"
     )
 
 parser.add_argument (
-      "-p"
-    , "--print-tours"
+      "-g"
+    , "--gpgpu"
     , action  = "store_true"
-    , dest    = "need_tours_printed"
+    , dest    = "need_gpu_2opt"
     , default = False
-    , help    = "print explicit tours"
+    , help    = "calculate distance traveled by gpgpu 2-opt heuristic"
     )
 
 parser.add_argument (

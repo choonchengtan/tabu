@@ -3,8 +3,9 @@ import time
 
 from argparser  import parser
 from tspparse   import read_tsp_file
-from algorithms import ( calc_serial_2opt_tour
-                       , calc_parallel_2opt_tour )
+from algorithms import ( calc_sequential_2opt_tour
+                       , calc_openmp_2opt_tour 
+                       , calc_gpu_2opt_tour )
 
 from glob    import iglob
 from os.path import isfile, isdir, join, exists
@@ -33,16 +34,22 @@ def print_results_from_tsp_path(call_args, tsp_path):
     print("")
     print("Problem: {}".format(tsp_path))
 
-    if call_args.need_serial_2opt:
+    if call_args.need_sequential_2opt:
         print("Sequential:")
         print("")
         print("Tour: {}"
-             . format(calc_serial_2opt_tour(tsp)))
+             . format(calc_sequential_2opt_tour(tsp)))
 
-    if call_args.need_parallel_2opt:
+    if call_args.need_openmp_2opt:
         print("Open MP:")
         print("")
-        result = calc_parallel_2opt_tour(tsp)
+        result = calc_openmp_2opt_tour(tsp)
+        print("Tour Length = {} | Cities = {}" . format(result[0], result[1]))
+
+    if call_args.need_gpu_2opt:
+        print("GPGPU:")
+        print("")
+        result = calc_gpu_2opt_tour(tsp)
         print("Tour Length = {} | Cities = {}" . format(result[0], result[1]))
 
     del(tsp)
