@@ -186,7 +186,7 @@ def calc_sequential_2opt_tour(tsp):
     cities = tsp["CITIES"]
     
     #tour = nearest_neighbor(cities,1)
-    tour = just_returnTour(cities)
+    tour =(cities)
 
 
     iteration=200
