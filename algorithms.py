@@ -1,12 +1,13 @@
-from collections import deque
-from city        import distance, GeoCity, Euc_2D, GeoCoord
-from tspparse    import read_tsp_file
-from pprint      import pprint
-from multiprocessing import Process, Queue, Pool
-from functools   import partial
-from itertools   import chain
-from pycuda.compiler import SourceModule
-from pycuda      import gpuarray
+from collections        import deque
+from city               import distance, GeoCity, Euc_2D, GeoCoord
+from tspparse           import read_tsp_file
+from pprint             import pprint
+from multiprocessing    import Process, Queue, Pool
+from functools          import partial
+from itertools          import chain
+from pycuda.compiler    import SourceModule
+from pycuda             import gpuarray
+from math               import ceil, floor 
 import copy
 import random
 import pycuda.driver as cuda 
@@ -366,15 +367,15 @@ mod_gpu = SourceModule("""
 
 extern "C" {
 
-    const int MAX_SZ = 3000;
-    __shared__ __device__ float _city_xy[MAX_SZ * 2];
+    const int MAX_SZ = 3000;                            // maximum path size, each chunk's MAX
+    __shared__ __device__ float _city_xy[MAX_SZ * 2];   // store city x,y as x1,x2,...,xn,y1,y2...,yn
     __shared__ __device__ int _city_xy_sz;
-    __shared__ __device__ int _path[MAX_SZ];
+    __shared__ __device__ int _path[MAX_SZ];            // path, not tour
     __shared__ __device__ int _path_sz;
-    __shared__ __device__ float _cost_reduct[256]; 
+    __shared__ __device__ float _cost_reduct[256];      // shared memory for parallel 256 threads
 
-    // purpose of load balancing triangular matrix for every possible 2-opt swap
-    // calculate row and col from linear index i and matrix size M
+    // for load balancing triangular matrix for every possible 2-opt swap
+    // calculate row from linear index i and matrix size M
     __device__ int row_index(int i,int M) {
         float m = M;
         float row = (-2*m - 1 + sqrt( (4*m*(m+1) - 8*(float)i - 7) )) / -2;
@@ -383,6 +384,8 @@ extern "C" {
         return (int)row;
     }
 
+    // for load balancing triangular matrix for every possible 2-opt swap
+    // calculate col from linear index i and matrix size M
     __device__ int col_index(int i, int M) {
         int row = row_index(i, M);
         return  i - M * row + row*(row+1) / 2;
@@ -403,44 +406,57 @@ extern "C" {
         }
         __syncthreads();
 
-        // for every thread, find best (edge pt1 + edge pt2) for all threads
-        // then swap at thread 0
+        // for every thread, find best edge pair individually 
+        // then swap the best pair at thread 0
         const int n = path_sz - 2;
         const int MAX_STEPS = n * (n+1) / 2; 
         int pt1, pt2, c1, c2, c3, c4, tmp, k;
         float oe1, oe2, ne1, ne2;
-        for (int q=0; q<25; q++) {       // swap top 5 candidates for all collected threads' result in _cost_reduct
-            for (int i=0; i<MAX_STEPS; i+=blockDim.x) {
+        for (int q=0; q<1; q++) {                          // apply swap to top candidate in all threads' result - 25 times
+            for (int i=0; i<MAX_STEPS; i+=blockDim.x) {     // evaluate blockDim.x possible edge swaps per iteration
                 k = i + threadIdx.x; 
-                if (k< MAX_STEPS) {
+                if (k < MAX_STEPS) {
                     pt1 = row_index(k, n);
                     pt2 = col_index(k, n) + 2;
-                    c1 = _path[pt1];
-                    c2 = _path[pt1+1];
-                    c3 = _path[pt2];
-                    c4 = _path[pt2+1];
-                    oe1 = sqrtf(powf(_city_xy[c1] - _city_xy[c2], 2) + powf(_city_xy[c1 + _path_sz] - _city_xy[c2 + _path_sz], 2));  
-                    oe2 = sqrtf(powf(_city_xy[c3] - _city_xy[c4], 2) + powf(_city_xy[c3 + _path_sz] - _city_xy[c4 + _path_sz], 2));  
-                    ne1 = sqrtf(powf(_city_xy[c1] - _city_xy[c3], 2) + powf(_city_xy[c1 + _path_sz] - _city_xy[c3 + _path_sz], 2));  
-                    ne2 = sqrtf(powf(_city_xy[c2] - _city_xy[c4], 2) + powf(_city_xy[c2 + _path_sz] - _city_xy[c4 + _path_sz], 2));  
-                    _cost_reduct[threadIdx.x] = (oe1+oe2) - (ne1+ne2); 
+                    if (pt2 < _path_sz-1) {
+                        c1 = _path[pt1];
+                        c2 = _path[pt1+1];
+                        c3 = _path[pt2];
+                        c4 = _path[pt2+1];
+                        oe1 = sqrtf(powf(_city_xy[c1] - _city_xy[c2], 2) + powf(_city_xy[c1 + _path_sz] - _city_xy[c2 + _path_sz], 2));  
+                        oe2 = sqrtf(powf(_city_xy[c3] - _city_xy[c4], 2) + powf(_city_xy[c3 + _path_sz] - _city_xy[c4 + _path_sz], 2));  
+                        ne1 = sqrtf(powf(_city_xy[c1] - _city_xy[c3], 2) + powf(_city_xy[c1 + _path_sz] - _city_xy[c3 + _path_sz], 2));  
+                        ne2 = sqrtf(powf(_city_xy[c2] - _city_xy[c4], 2) + powf(_city_xy[c2 + _path_sz] - _city_xy[c4 + _path_sz], 2));  
+                        _cost_reduct[threadIdx.x] = (oe1+oe2) - (ne1+ne2); 
+                        //printf("thread %d pt1,pt2 %d,%d cost_redu %.0f\\n", threadIdx.x, pt1, pt2, _cost_reduct[threadIdx.x]);
+                    }
                 }
                 __syncthreads();
+
                 if (threadIdx.x == 0) {
-                    float maximum = _cost_reduct[0]; 
+                    printf("[");
+                    for (int z=0; z<_path_sz; z++) 
+                        printf("%d ", _path[z]); 
+                    printf("]\\n");
+                    // find maximum cost reduction
+                    float maximum = -1;
                     int idx = -1;
                     for (int j=0; j<blockDim.x; j++) {
                         if (_cost_reduct[j] > 0 && _cost_reduct[j] > maximum) {
-                            //printf("cost_reduct iter %d loop %d thread %d cost %.0f\\n", q, i, j, _cost_reduct[j]);
+                            printf("loop %d thread %d cost %.0f\\n", i, j, _cost_reduct[j]);
                             maximum = _cost_reduct[j];
                             idx = j;
                         }
                         _cost_reduct[j] = 0;
                     }
+            
+                    // swap edge pairs in shared memory if at least one cost reduction exist 
+                    // recalculate the path's index pt1 and pt2 from idx
                     if (idx >= 0) {
                         int kt = i + idx; 
                         pt1 = row_index(kt, n);
                         pt2 = col_index(kt, n) + 2;
+                        printf("pt1 %d pt2 %d\\n", pt1, pt2);
                         for (int b=pt1+1, e=pt2; b < e; b++, e--) {
                             tmp = _path[b];
                             _path[b] = _path[e];
@@ -455,6 +471,10 @@ extern "C" {
 
         // copy back from shared memory to device global memory
         if (threadIdx.x == 0) {
+            printf("[");
+            for (int z=0; z<_path_sz; z++) 
+                printf("%d ", _path[z]); 
+            printf("]\\n");
             for (int i=0; i<path_sz; i++) {
                 path[i] = _path[i];
             } 
@@ -469,22 +489,59 @@ def calc_gpu_2opt_tour(tsp):
     gpu_2opt_path = mod_gpu.get_function("gpu_2opt_path")
     
     THREADS = 256 
+    MAX_ITER = 2
 
     city_xy = [c.x for c in tsp["CITIES"]] + [c.y for c in tsp["CITIES"]] 
     city_xy_n = numpy.array(city_xy)
-    tour_tmp = range(len(tsp["CITIES"]))
-    #tour_tmp = nearest_neighbor(tsp["CITIES"],1)
-    print tour_distance(tsp["CITIES"], tour_tmp)
     
-    tour_n = numpy.array(tour_tmp)
+    #tour_n = numpy.array(range(len(tsp["CITIES"])))
+    tour_n = numpy.array(nearest_neighbor(tsp["CITIES"],2))
+    tour_n = numpy.append(tour_n, tour_n[0])
+    tour_sz = tour_n.size
+    print tour_distance(tsp["CITIES"], tour_n)
+
+    # split into at least 2 chunks because gpu_2opt_path() only accept paths not tours
+    chunk_count = ceil(tour_sz / 3000.0)
+    if chunk_count <= 1:
+        chunk_count = 2
+
     city_xy_g = gpuarray.to_gpu(city_xy_n.astype(numpy.float32))
-    tour_g = gpuarray.to_gpu(tour_n.astype(numpy.int32))
 
-    gpu_2opt_path(city_xy_g, numpy.int32(city_xy_n.size), tour_g, numpy.int32(tour_n.size), block=(THREADS, 1, 1))
-    cuda.Context.synchronize()
+    # for each iteration, split [0 1 2 3 4 5 6 0]
+    # into [0 1 2 3 4],[4 5 6 0]
+    # because gpu can only hold 3000 city coords each time
+    # optimize each split path in gpu one by one, and collect into results
+    # results = [[0 1 3 2 4],[4 6 5 0]]
+    # flatten and remove one city in between into [0 1 3 2 4 6 5 0]
+    # rotate it by 1/3 [3 2 4 6 5 0 1 3]    
+    # repeat again
+    for itr in xrange(MAX_ITER):
+        splits = numpy.array_split(tour_n, chunk_count)
+        results = []
+        
+        for idx, val in enumerate(splits):
+            # split paths overlap one city in between, add that
+            if idx < len(splits)-1:
+                val = numpy.append(val, splits[idx+1][0])
 
-    best_tour = tour_g.get()
-    best_tour = numpy.append(best_tour, best_tour[0])
+            path_g = gpuarray.to_gpu(val.astype(numpy.int32))
+            gpu_2opt_path(city_xy_g, numpy.int32(city_xy_n.size), path_g, numpy.int32(val.size), block=(THREADS, 1, 1))
+            cuda.Context.synchronize()
+            tmp = path_g.get()
+
+            # split paths overlap one city in between, remove that
+            if idx < len(splits)-1:
+                tmp = numpy.delete(tmp, tmp.size-1)
+
+            results.append(tmp)
+
+        tour_n = [city for subt in results for city in subt]    # flatten list
+        print tour_distance(tsp["CITIES"], tour_n)
+        tour_n = numpy.delete(tour_n,len(tour_n)-1)             # remove loop back city
+        tour_n = numpy.roll(tour_n, tour_sz/3)                  # rotate tour
+        tour_n = numpy.append(tour_n, tour_n[0])                # add back loop back city
+
+    best_tour = tour_n
     best_dist = tour_distance(tsp["CITIES"], best_tour)
 
     return (best_dist, best_tour)
