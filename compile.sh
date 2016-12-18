@@ -8,7 +8,7 @@
 
 #python2.7 main.py -s ./tspfiles/lin105.tsp
 #python2.7 main.py -o ./tspfiles/lin105.tsp
-python2.7 main.py -g ./tspfiles/lin105.tsp
+#python2.7 main.py -g ./tspfiles/lin105.tsp
 
 #python2.7 main.py -s ./tspfiles/u574.tsp
 #python2.7 main.py -o ./tspfiles/u574.tsp
@@ -16,7 +16,7 @@ python2.7 main.py -g ./tspfiles/lin105.tsp
 
 #python2.7 main.py -s ./tspfiles/u1060.tsp
 #python2.7 main.py -o ./tspfiles/u1060.tsp
-#python2.7 main.py -g ./tspfiles/u1060.tsp
+python2.7 main.py -g ./tspfiles/u1060.tsp
 
 #python2.7 main.py -s ./tspfiles/fnl4461.tsp
 #python2.7 main.py -o ./tspfiles/fnl4461.tsp

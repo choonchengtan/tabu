@@ -412,7 +412,7 @@ extern "C" {
         const int MAX_STEPS = n * (n+1) / 2; 
         int pt1, pt2, c1, c2, c3, c4, tmp, k;
         float oe1, oe2, ne1, ne2;
-        for (int q=0; q<1; q++) {                          // apply swap to top candidate in all threads' result - 25 times
+        for (int q=0; q<25; q++) {                          // apply swap to top candidate in all threads' result - 25 times
             for (int i=0; i<MAX_STEPS; i+=blockDim.x) {     // evaluate blockDim.x possible edge swaps per iteration
                 k = i + threadIdx.x; 
                 if (k < MAX_STEPS) {
@@ -423,27 +423,29 @@ extern "C" {
                         c2 = _path[pt1+1];
                         c3 = _path[pt2];
                         c4 = _path[pt2+1];
-                        oe1 = sqrtf(powf(_city_xy[c1] - _city_xy[c2], 2) + powf(_city_xy[c1 + _path_sz] - _city_xy[c2 + _path_sz], 2));  
-                        oe2 = sqrtf(powf(_city_xy[c3] - _city_xy[c4], 2) + powf(_city_xy[c3 + _path_sz] - _city_xy[c4 + _path_sz], 2));  
-                        ne1 = sqrtf(powf(_city_xy[c1] - _city_xy[c3], 2) + powf(_city_xy[c1 + _path_sz] - _city_xy[c3 + _path_sz], 2));  
-                        ne2 = sqrtf(powf(_city_xy[c2] - _city_xy[c4], 2) + powf(_city_xy[c2 + _path_sz] - _city_xy[c4 + _path_sz], 2));  
+                        oe1 = sqrtf(powf(_city_xy[c1] - _city_xy[c2], 2) + powf(_city_xy[c1 + _city_xy_sz/2] - _city_xy[c2 + _city_xy_sz/2], 2));  
+                        oe2 = sqrtf(powf(_city_xy[c3] - _city_xy[c4], 2) + powf(_city_xy[c3 + _city_xy_sz/2] - _city_xy[c4 + _city_xy_sz/2], 2));  
+                        ne1 = sqrtf(powf(_city_xy[c1] - _city_xy[c3], 2) + powf(_city_xy[c1 + _city_xy_sz/2] - _city_xy[c3 + _city_xy_sz/2], 2));  
+                        ne2 = sqrtf(powf(_city_xy[c2] - _city_xy[c4], 2) + powf(_city_xy[c2 + _city_xy_sz/2] - _city_xy[c4 + _city_xy_sz/2], 2));  
                         _cost_reduct[threadIdx.x] = (oe1+oe2) - (ne1+ne2); 
-                        //printf("thread %d pt1,pt2 %d,%d cost_redu %.0f\\n", threadIdx.x, pt1, pt2, _cost_reduct[threadIdx.x]);
+                        //printf("k %d %d c1,c2,c3,c4 %d,%d,%d,%d oe1,oe2,ne1,ne2 %.0f,%.0f,%.0f,%.0f x1,y1,x2,y2 %f,%f,%f,%f cost_redu %.0f\\n", k, _city_xy_sz/2, c1,c2,c3,c4, oe1,oe2,ne1,ne2, _city_xy[c1], _city_xy[c1 + _city_xy_sz/2], _city_xy[c2], _city_xy[c2 + _city_xy_sz/2], _cost_reduct[threadIdx.x]);
                     }
                 }
                 __syncthreads();
 
                 if (threadIdx.x == 0) {
+                    /*
                     printf("[");
                     for (int z=0; z<_path_sz; z++) 
                         printf("%d ", _path[z]); 
                     printf("]\\n");
+                    */
                     // find maximum cost reduction
                     float maximum = -1;
                     int idx = -1;
                     for (int j=0; j<blockDim.x; j++) {
                         if (_cost_reduct[j] > 0 && _cost_reduct[j] > maximum) {
-                            printf("loop %d thread %d cost %.0f\\n", i, j, _cost_reduct[j]);
+                            //printf("loop %d thread %d cost %.0f\\n", i, j, _cost_reduct[j]);
                             maximum = _cost_reduct[j];
                             idx = j;
                         }
@@ -456,7 +458,7 @@ extern "C" {
                         int kt = i + idx; 
                         pt1 = row_index(kt, n);
                         pt2 = col_index(kt, n) + 2;
-                        printf("pt1 %d pt2 %d\\n", pt1, pt2);
+                        //printf("pt1 %d pt2 %d\\n", pt1, pt2);
                         for (int b=pt1+1, e=pt2; b < e; b++, e--) {
                             tmp = _path[b];
                             _path[b] = _path[e];
@@ -471,10 +473,12 @@ extern "C" {
 
         // copy back from shared memory to device global memory
         if (threadIdx.x == 0) {
+            /*
             printf("[");
             for (int z=0; z<_path_sz; z++) 
                 printf("%d ", _path[z]); 
             printf("]\\n");
+            */
             for (int i=0; i<path_sz; i++) {
                 path[i] = _path[i];
             } 
@@ -488,16 +492,18 @@ def calc_gpu_2opt_tour(tsp):
 
     gpu_2opt_path = mod_gpu.get_function("gpu_2opt_path")
     
-    THREADS = 256 
-    MAX_ITER = 2
+    THREADS = 256
+    MAX_ITER = 3
 
     city_xy = [c.x for c in tsp["CITIES"]] + [c.y for c in tsp["CITIES"]] 
     city_xy_n = numpy.array(city_xy)
+    city_sz = len(tsp["CITIES"])
     
-    #tour_n = numpy.array(range(len(tsp["CITIES"])))
-    tour_n = numpy.array(nearest_neighbor(tsp["CITIES"],2))
+    tour_n = numpy.array(range(city_sz))
+    #tour_n = numpy.array(nearest_neighbor(tsp["CITIES"],2))
     tour_n = numpy.append(tour_n, tour_n[0])
     tour_sz = tour_n.size
+    print tour_n
     print tour_distance(tsp["CITIES"], tour_n)
 
     # split into at least 2 chunks because gpu_2opt_path() only accept paths not tours
